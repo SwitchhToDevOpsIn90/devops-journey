@@ -1,34 +1,28 @@
 #!/bin/bash
 
-echo "============================="
-echo "   SYSTEM INFORMATION"
-echo "============================="
+SERVER_NAME="My DevOps Mac"
+DISK_LIMIT=80
+DATE=$(date '+%Y-%m-%d %H:%M:%S')
+LOG_FILE="serverwatch.log"
+
+echo "================================="
+echo "  ServerWatch - $SERVER_NAME"
+echo "  Checked at: $DATE"
+echo "================================="
+echo ""
+echo "--- Disk Check ---"
+DISK_USED=$(df / | tail -1 | awk '{print $5}' | sed 's/%//')
+echo "Disk usage: ${DISK_USED}%"
+
+if [ "$DISK_USED" -gt "$DISK_LIMIT" ]; then
+    echo "WARNING: Disk at ${DISK_USED}% - above limit!"
+else
+    echo "OK: Disk is safe."
+fi
 
 echo ""
-echo "Date and Time:"
-date
-
-echo ""
-echo "Current User:"
-whoami
-
-echo ""
-echo "Current Directory:"
-pwd
-
-echo ""
-echo "Disk Usage:"
-df -h
-
-echo ""
-echo "Memory Usage:"
-vm_stat
-
-echo ""
-echo "Running Processes (top 5):"
-ps aux | head -6
-
-echo ""
-echo "============================="
-echo "   END OF REPORT"
-echo "============================="
+echo "$DATE | Disk: ${DISK_USED}%" >> $LOG_FILE
+echo "Result saved to $LOG_FILE"
+echo "================================="
+echo "Check complete."
+echo "================================="
