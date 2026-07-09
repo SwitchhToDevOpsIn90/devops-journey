@@ -1,9 +1,10 @@
 #!/bin/bash
 
-SERVER_NAME="My DevOps Mac"
+SERVER_NAME="AWS-ServerWatch"
 DISK_LIMIT=80
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 LOG_FILE="serverwatch.log"
+S3_BUCKET="serverwatch-logs-ammyserverwatch-logs-ammy"
 
 echo "================================="
 echo "  ServerWatch - $SERVER_NAME"
@@ -23,6 +24,12 @@ fi
 echo ""
 echo "$DATE | Disk: ${DISK_USED}%" >> $LOG_FILE
 echo "Result saved to $LOG_FILE"
+
+echo ""
+echo "--- Uploading log to S3 ---"
+aws s3 cp $LOG_FILE s3://$S3_BUCKET/$LOG_FILE
+echo "Upload complete."
+
 echo "================================="
 echo "Check complete."
 echo "================================="
