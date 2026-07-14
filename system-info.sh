@@ -33,3 +33,12 @@ echo "Upload complete."
 echo "================================="
 echo "Check complete."
 echo "================================="
+
+echo ""
+echo "--- Pushing metric to CloudWatch ---"
+aws cloudwatch put-metric-data \
+  --namespace "ServerWatch/Custom" \
+  --metric-name "DiskSpaceUtilization" \
+  --value "$DISK_USED" \
+  --unit Percent
+echo "Metric pushed to CloudWatch."
