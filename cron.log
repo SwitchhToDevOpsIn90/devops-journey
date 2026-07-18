@@ -1,0 +1,20 @@
+=================================
+  ServerWatch - AWS-ServerWatch
+  Checked at: 2026-07-18 22:36:55
+=================================
+
+--- Disk Check ---
+Disk usage: 44%
+OK: Disk is safe.
+
+Result saved to serverwatch.log
+
+--- Uploading log to S3 ---
+Completed 300 Bytes/300 Bytes (2.9 KiB/s) with 1 file(s) remainingupload: ./serverwatch.log to s3://serverwatch-logs-ammyserverwatch-logs-ammy/serverwatch.log
+Upload complete.
+=================================
+Check complete.
+=================================
+
+--- Pushing metric to CloudWatch ---
+Metric pushed to CloudWatch.
