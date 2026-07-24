@@ -42,3 +42,13 @@ aws cloudwatch put-metric-data \
   --value "$DISK_USED" \
   --unit Percent
 echo "Metric pushed to CloudWatch."
+
+
+echo ""
+echo "--- Pushing log entry to CloudWatch Logs ---"
+TIMESTAMP=$(date +%s%3N)
+aws logs put-log-events \
+  --log-group-name "/serverwatch/app" \
+  --log-stream-name "serverwatch-runs" \
+  --log-events timestamp=$TIMESTAMP,message="$DATE | Disk: ${DISK_USED}%"
+echo "Log pushed to CloudWatch."
