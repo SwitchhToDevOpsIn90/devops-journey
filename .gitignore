@@ -1,2 +1,4 @@
 *.pem
 *.key
+cron.log
+serverwatch.log
