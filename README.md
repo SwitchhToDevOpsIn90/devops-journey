@@ -54,3 +54,5 @@ Built incrementally across Sessions 3 through 14 of a public 90-session DevOps l
 
 @SwitchToDevOpsIn90, documenting every session publicly. Identity reveals at Session 90.
 # GitOps test line
+
+GitOps automation added in Session 15.
