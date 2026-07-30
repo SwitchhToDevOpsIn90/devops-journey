@@ -1,0 +1,7 @@
+Free Tier Status Check - 2026-07-30
+Credits remaining: $131.58 USD
+Days remaining: 164 days (until approx mid-January 2027)
+Month-to-date shown cost: $8.23 (fully covered by credits, zero actual charge)
+Real per-service cost via Cost Explorer: $0.00 across all services
+Rule: User does not want to spend even a single real dollar on AWS - always verify Free Tier coverage before provisioning anything new
+Action: Monitor before credits drop below ~$20 or days below ~15 - upgrade or pause resources at that point
