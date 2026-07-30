@@ -1,0 +1,10 @@
+#	PermitTTY no
+#	ForceCommand cvs server
+
+# ===== Session 17 hardening — added explicitly for documentation/audit =====
+PasswordAuthentication no
+PermitRootLogin no
+PubkeyAuthentication yes
+MaxAuthTries 3
+LoginGraceTime 20
+X11Forwarding no
