@@ -1,0 +1,16 @@
+{
+    "Tags": [
+        {
+            "Key": "Environment",
+            "ResourceId": "i-05b96b32d371af95b",
+            "ResourceType": "instance",
+            "Value": "learning"
+        },
+        {
+            "Key": "Project",
+            "ResourceId": "i-05b96b32d371af95b",
+            "ResourceType": "instance",
+            "Value": "ServerWatch"
+        }
+    ]
+}
