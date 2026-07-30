@@ -19,9 +19,15 @@ SERVER_NAME="AWS-ServerWatch"
 DISK_LIMIT=80
 DATE=$(date '+%Y-%m-%d %H:%M:%S')
 LOG_FILE="serverwatch.log"
-S3_BUCKET="serverwatch-logs-ammyserverwatch-logs-ammy"
-LOG_GROUP="/serverwatch/app"
-LOG_STREAM="serverwatch-runs"
+# Load secrets/config from .env (never hardcode values directly in the script)
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+else
+  echo "ERROR: .env file not found."
+  exit 1
+fi
 
 echo "================================="
 echo "  ServerWatch - $SERVER_NAME"

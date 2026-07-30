@@ -3,3 +3,4 @@
 cron.log
 serverwatch.log
 gitops-sync.log
+.env
