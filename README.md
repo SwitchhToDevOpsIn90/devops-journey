@@ -56,3 +56,11 @@ Built incrementally across Sessions 3 through 14 of a public 90-session DevOps l
 # GitOps test line
 
 GitOps automation added in Session 15.
+
+## Branching Strategy
+
+Starting Session 27, this repo uses feature branches and pull requests instead of committing directly to main.
+
+- Feature branches: feature/session-topic
+- All changes go through a PR before merging to main
+- main is a protected branch: no direct pushes, requires PR review
