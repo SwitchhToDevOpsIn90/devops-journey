@@ -23,11 +23,15 @@ Stateful workloads are where Kubernetes mistakes become data loss. The session p
 - Running EC2 instances: ServerWatch t3.micro only
 - Unattached EBS volumes: none
 - IAM roles named session36: none
-- All 5 temporary permissions removed from mac-cli-user; AccessDeniedException on eks:ListClusters proved it
+- EC2 console: only the ServerWatch volume remains, and no snapshots exist in this Region
+- All 5 temporary permissions removed from mac-cli-user; AccessDeniedException on eks:ListClusters proves the access is gone, not that the cluster is gone, so the checks above ran first
+
+## Follow-up tests on Minikube
+- Deleted and recreated the Deployment with the PVC kept: the file survived across different pods (...f62gj to ...m7f2w)
+- Tested reclaim policy Retain: after deleting the claim, the PV remained with status Released, and it was then deleted by hand
+- Scanned the manifests and this log: only secret references, no password values or 12-digit account numbers
 
 ## Honest gaps
-- The Deployment-deletion test (Test 1) was run, but its output was not captured in these notes
-- Retain was explained but not tested
 - The actual cost of the session is still to be checked against the AWS Billing page
 
 ## Key gotchas
