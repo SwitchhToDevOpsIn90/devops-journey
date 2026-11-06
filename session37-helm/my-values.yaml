@@ -1,0 +1,6 @@
+image:
+  repository: dockerapp
+  tag: "1.0"
+  pullPolicy: Never
+service:
+  port: 5000
