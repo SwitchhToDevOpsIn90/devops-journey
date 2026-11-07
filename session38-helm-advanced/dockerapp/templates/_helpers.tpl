@@ -60,3 +60,10 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Name of the app's ConfigMap, defined once and reused.
+*/}}
+{{- define "dockerapp.configName" -}}
+{{ include "dockerapp.fullname" . }}-config
+{{- end }}
