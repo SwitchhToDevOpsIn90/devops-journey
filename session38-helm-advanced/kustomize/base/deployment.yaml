@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dockerapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dockerapp
+  template:
+    metadata:
+      labels:
+        app: dockerapp
+    spec:
+      containers:
+        - name: dockerapp
+          image: dockerapp:1.0
+          imagePullPolicy: Never

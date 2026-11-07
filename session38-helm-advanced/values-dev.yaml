@@ -1,0 +1,11 @@
+image:
+  repository: dockerapp
+  tag: "1.0"
+  pullPolicy: Never
+service:
+  port: 5000
+replicaCount: 1
+config:
+  data:
+    APP_ENV: dev
+    APP_MESSAGE: "Hello from dev"
