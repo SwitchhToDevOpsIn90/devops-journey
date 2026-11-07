@@ -5,7 +5,7 @@ metadata:
 spec:
   containers:
   - name: flask-container
-    image: 446503125939.dkr.ecr.eu-north-1.amazonaws.com/flask-docker-app:k8s-arm64
+    image: <ACCOUNT_ID>.dkr.ecr.eu-north-1.amazonaws.com/flask-docker-app:k8s-arm64
     ports:
     - containerPort: 5000
   imagePullSecrets:
