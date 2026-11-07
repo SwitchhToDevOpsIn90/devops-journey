@@ -31,3 +31,12 @@ Session 37 only changed values. This session changed the package itself: optiona
 - kubectl exec showed the environment values inside running containers in each case
 - helm list -n prod showed dockerapp-0.2.0 with app version 1.0
 - After cleanup, helm list -A was empty; no AWS resources were used
+
+## Add-on lab (separate commit)
+- Wrote a named template, dockerapp.configName, in _helpers.tpl and used it in both the ConfigMap and the envFrom reference; helm template rendered t-dockerapp-config in both places
+- default: with no image tag set, the image rendered as nginx:1.0 from appVersion
+- required: an empty image.repository stopped rendering with "image.repository is required" at deployment.yaml:42
+- values.schema.json: helm lint passed normally, then failed on replicaCount=two ("got string, want integer") and replicaCount=0 ("minimum: got 0, want 1")
+- helm get values showed the user-supplied dev values; helm get manifest showed the installed YAML, including myapp-dockerapp-config; helm template --debug printed the loaded schema before the error
+- Uninstalled the release and stopped Minikube
+- Still not run: helm test (Minikube cannot download busybox), hooks and subcharts
