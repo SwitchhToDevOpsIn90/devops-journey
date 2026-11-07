@@ -32,7 +32,7 @@
         "Metrics": [
             "UnblendedCost"
         ],
-        "BillingViewArn": "arn:aws:billing::446503125939:billingview/primary",
+        "BillingViewArn": "arn:aws:billing::<ACCOUNT_ID>:billingview/primary",
         "HealthStatus": {
             "Status": "HEALTHY",
             "LastUpdatedTime": "2026-07-30T11:41:07.120000+00:00"
