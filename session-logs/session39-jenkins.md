@@ -34,3 +34,16 @@ Jenkins is the controller-and-agents model used in most CI/CD estates. The contr
 ## Files
 - session39-jenkins/run-jenkins.sh: controller and agent setup (no secrets stored)
 - session39-jenkins/pipelines/: the four pipelines run in this session
+
+## Add-on lab (separate commit)
+- Build trigger: added pollSCM to github-checkout on a test branch (jenkins-poll-test); a push (feccac3) started build 3 within about a minute, "Started by an SCM change", building exactly that commit
+- Why polling: GitHub webhooks cannot reach a Jenkins bound to 127.0.0.1; a tunnel would expose it, so polling is the safe trade-off here
+- The polling script was also pasted into hello-pipeline by mistake (builds 9 and 10); polling was removed from both jobs afterwards
+- Access control: switched to matrix-based security; devops-admin has Administer, authenticated users only Overall Read and Job Read, anonymous nothing
+- The Create User form failed with "No valid crumb" in Firefox and Chrome even after signing out and in; the user was created from the Script Console instead
+- Boundary test as viewer: no Build Now or Configure in the menu; typing /job/hello-pipeline/configure gave "missing the Job/Configure permission"; /manage/script was also denied
+- API token (session39-cli): whoAmI returned devops-admin; a POST build with the token returned HTTP 201 without a crumb; the same POST as viewer returned HTTP 403; the token was revoked afterwards
+- Backup: jenkins_home archived to ~/jenkins-backups (192 MB, mode 600), outside the repo; the archive contains credentials.xml and secrets/master.key, so the backup itself is a secret
+- Versions: lts-jdk21 is a floating tag; the running version was 2.580.2 (digest sha256:74401de6...); 92 plugins, 4 already with updates; run-jenkins.sh now pins jenkins/jenkins:2.580.2-lts-jdk21
+- Decision for Session 41: Docker builds will use a separate build agent with its own isolated Docker engine (Docker-in-Docker over TLS), never the Mac's Docker socket
+- Still not done: private repository with a scoped token, and a Jenkinsfile read from Git (Session 40)
