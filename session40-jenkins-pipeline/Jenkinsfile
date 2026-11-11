@@ -1,0 +1,60 @@
+pipeline {
+    agent { label 'docker-agent' }
+
+    options {
+        timestamps()
+        timeout(time: 10, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        APP_DIR  = 'session22-dockerfile'
+        ARTIFACT = "dockerapp-${BUILD_NUMBER}.zip"
+    }
+
+    stages {
+        stage('Info') {
+            steps {
+                sh 'git log --oneline -1 && python3 --version'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    .venv/bin/pip install --quiet --upgrade pip
+                    .venv/bin/pip install --quiet -r ${APP_DIR}/requirements.txt -r ${APP_DIR}/requirements-dev.txt
+                '''
+            }
+        }
+        stage('Test') {
+            steps {
+                dir("${APP_DIR}") {
+                    sh '../.venv/bin/python -m pytest -q --junitxml=../test-results.xml'
+                }
+            }
+        }
+        stage('Package') {
+            steps {
+                sh 'cd ${APP_DIR} && zip -r ../${ARTIFACT} app.py requirements.txt Dockerfile'
+                archiveArtifacts artifacts: "${ARTIFACT}", fingerprint: true
+            }
+        }
+    }
+
+    post {
+        always {
+            junit allowEmptyResults: true, testResults: 'test-results.xml'
+        }
+        success {
+            echo "PASS: ${ARTIFACT} built and archived"
+        }
+        failure {
+            echo "FAIL: check the stage marked red above"
+        }
+        cleanup {
+            deleteDir()
+        }
+    }
+}
