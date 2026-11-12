@@ -11,6 +11,7 @@ pipeline {
     environment {
         APP_DIR = 'session22-dockerfile'
         IMAGE   = 'dockerapp'
+        AWS_DEFAULT_REGION = 'eu-north-1'
     }
 
     stages {
@@ -45,6 +46,27 @@ pipeline {
                 '''
             }
             post { always { sh 'docker rm -f smoke-${BUILD_NUMBER} || true' } }
+        }
+        stage('Push to ECR') {
+            agent { label 'docker-builder' }
+            options { skipDefaultCheckout() }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'aws-ecr-push',
+                                                  usernameVariable: 'AWS_ACCESS_KEY_ID',
+                                                  passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                        export DOCKER_CONFIG=$(mktemp -d)
+                        trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+                        ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+                        REGISTRY=${ACCOUNT}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+                        aws ecr get-login-password | docker login --username AWS --password-stdin ${REGISTRY}
+                        docker tag ${IMAGE}:${TAG} ${REGISTRY}/${IMAGE}:${TAG}
+                        docker push ${REGISTRY}/${IMAGE}:${TAG}
+                        aws ecr describe-images --repository-name ${IMAGE} --image-ids imageTag=${TAG} \
+                          --query 'imageDetails[0].[imageTags[0],imageDigest,imageSizeInBytes]' --output text | sed 's/^/IN ECR: /'
+                    '''
+                }
+            }
         }
     }
 }
