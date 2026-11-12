@@ -1,0 +1,50 @@
+pipeline {
+    agent none
+
+    options {
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        APP_DIR = 'session22-dockerfile'
+        IMAGE   = 'dockerapp'
+    }
+
+    stages {
+        stage('Test') {
+            agent { label 'docker-agent' }
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    .venv/bin/pip install --quiet -r ${APP_DIR}/requirements.txt -r ${APP_DIR}/requirements-dev.txt
+                    cd ${APP_DIR} && ../.venv/bin/python -m pytest -q --junitxml=../test-results.xml
+                '''
+            }
+            post { always { junit allowEmptyResults: true, testResults: 'test-results.xml' } }
+        }
+        stage('Build image') {
+            agent { label 'docker-builder' }
+            steps {
+                script { env.TAG = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim() }
+                sh 'docker build -t ${IMAGE}:${TAG} ${APP_DIR}'
+                sh 'docker image inspect ${IMAGE}:${TAG} --format "built {{.RepoTags}} arch={{.Architecture}} size={{.Size}}"'
+            }
+        }
+        stage('Smoke test') {
+            agent { label 'docker-builder' }
+            options { skipDefaultCheckout() }
+            steps {
+                sh '''
+                    docker run -d --name smoke-${BUILD_NUMBER} -p 15000:5000 ${IMAGE}:${TAG}
+                    sleep 3
+                    curl -sf http://docker:15000/ | tee smoke.txt
+                    grep -q "Flask running" smoke.txt
+                '''
+            }
+            post { always { sh 'docker rm -f smoke-${BUILD_NUMBER} || true' } }
+        }
+    }
+}
