@@ -1,0 +1,72 @@
+pipeline {
+    agent none
+
+    options {
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        APP_DIR = 'session22-dockerfile'
+        IMAGE   = 'dockerapp'
+        AWS_DEFAULT_REGION = 'eu-north-1'
+    }
+
+    stages {
+        stage('Test') {
+            agent { label 'docker-agent' }
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    .venv/bin/pip install --quiet -r ${APP_DIR}/requirements.txt -r ${APP_DIR}/requirements-dev.txt
+                    cd ${APP_DIR} && ../.venv/bin/python -m pytest -q --junitxml=../test-results.xml
+                '''
+            }
+            post { always { junit allowEmptyResults: true, testResults: 'test-results.xml' } }
+        }
+        stage('Build image') {
+            agent { label 'docker-builder' }
+            steps {
+                script { env.TAG = sh(script: 'git rev-parse --short=7 HEAD', returnStdout: true).trim() }
+                sh 'docker build -t ${IMAGE}:${TAG} ${APP_DIR}'
+                sh 'docker image inspect ${IMAGE}:${TAG} --format "built {{.RepoTags}} arch={{.Architecture}} size={{.Size}}"'
+            }
+        }
+        stage('Smoke test') {
+            agent { label 'docker-builder' }
+            options { skipDefaultCheckout() }
+            steps {
+                sh '''
+                    docker run -d --name smoke-${BUILD_NUMBER} -p 15000:5000 ${IMAGE}:${TAG}
+                    sleep 3
+                    curl -sf http://docker:15000/ | tee smoke.txt
+                    grep -q "Flask running" smoke.txt
+                '''
+            }
+            post { always { sh 'docker rm -f smoke-${BUILD_NUMBER} || true' } }
+        }
+        stage('Push to ECR') {
+            agent { label 'docker-builder' }
+            options { skipDefaultCheckout() }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'aws-ecr-push',
+                                                  usernameVariable: 'AWS_ACCESS_KEY_ID',
+                                                  passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                        export DOCKER_CONFIG=$(mktemp -d)
+                        trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+                        ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+                        REGISTRY=${ACCOUNT}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+                        aws ecr get-login-password | docker login --username AWS --password-stdin ${REGISTRY}
+                        docker tag ${IMAGE}:${TAG} ${REGISTRY}/${IMAGE}:${TAG}
+                        docker push ${REGISTRY}/${IMAGE}:${TAG}
+                        aws ecr describe-images --repository-name ${IMAGE} --image-ids imageTag=${TAG} \
+                          --query 'imageDetails[0].[imageTags[0],imageDigest,imageSizeInBytes]' --output text | sed 's/^/IN ECR: /'
+                    '''
+                }
+            }
+        }
+    }
+}
