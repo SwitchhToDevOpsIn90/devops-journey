@@ -65,3 +65,4 @@ Starting Session 27, this repo uses feature branches and pull requests instead o
 - All changes go through a PR before merging to main
 - main is a protected branch: no direct pushes, requires PR review
 test line - branch protection check
+
