@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-    paths: ['session22-dockerfile/**', '.github/workflows/ci.yml']
   push:
     branches: [main]
     paths: ['session22-dockerfile/**', '.github/workflows/ci.yml']
