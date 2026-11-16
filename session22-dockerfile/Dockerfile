@@ -1,9 +1,9 @@
-FROM python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e AS builder
+FROM python:3.15-alpine@sha256:0f9552bb28711333da16915ec146f5e6bb44a7fdac9ced15dc17c2e0206346dd AS builder
 WORKDIR /build
 COPY requirements.txt .
 RUN pip install --no-cache-dir --require-hashes --prefix=/install -r requirements.txt
 
-FROM python:3.13-alpine@sha256:9ef1a599f863231c3d91e941389bfdc4a2d6070557243d54df1a4e57015b960e
+FROM python:3.15-alpine@sha256:0f9552bb28711333da16915ec146f5e6bb44a7fdac9ced15dc17c2e0206346dd
 RUN adduser -D -u 10001 appuser
 RUN python -m pip uninstall -y pip && rm -rf /usr/local/lib/python3.13/ensurepip
 WORKDIR /app
