@@ -159,3 +159,27 @@ jobs:
           DIGEST_REF=$(docker inspect --format '{{index .RepoDigests 0}}' "$ECR_REPO:$GITHUB_SHA")
           echo "Pushed: $DIGEST_REF"
           echo "DIGEST_REF=$DIGEST_REF" >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Point kubectl at the cluster
+        run: aws eks update-kubeconfig --name "${{ vars.EKS_CLUSTER }}"
+      - name: Apply manifests pinned to the exact digest
+        run: |
+          sed "s|IMAGE_PLACEHOLDER|$DIGEST_REF|" session44-github-actions-cd/k8s/app.yaml > /tmp/app.yaml
+          grep -n 'image:' /tmp/app.yaml
+          kubectl apply -f /tmp/app.yaml
+          kubectl -n dockerapp rollout status deployment/dockerapp --timeout=180s
+      - name: Smoke test inside the cluster
+        run: |
+          kubectl -n dockerapp port-forward svc/dockerapp 8080:80 >/tmp/pf.log 2>&1 &
+          sleep 3
+          curl -sf localhost:8080/ | tee /tmp/out.txt
+          grep -q "Flask running" /tmp/out.txt
+          kubectl -n dockerapp get deploy dockerapp -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+      - name: Guardrail - deploy identity is boxed into its namespace
+        run: |
+          set -x
+          test "$(kubectl auth can-i create deployments -n dockerapp)" = "yes"
+          test "$(kubectl auth can-i create deployments -n kube-system)" = "no"
+          test "$(kubectl auth can-i get secrets -n kube-system)" = "no"
+          test "$(kubectl auth can-i create namespaces)" = "no"

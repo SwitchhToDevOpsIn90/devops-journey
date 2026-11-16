@@ -1,0 +1,28 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: session44-eks
+  region: eu-north-1
+  tags:
+    project: devops-journey
+    session: "44"
+accessConfig:
+  authenticationMode: API
+  bootstrapClusterCreatorAdminPermissions: true
+  accessEntries:
+    - principalARN: arn:aws:iam::446503125939:role/gha-devops-journey-deploy
+      accessPolicies:
+        - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy
+          accessScope:
+            type: namespace
+            namespaces: [dockerapp]
+vpc:
+  nat:
+    gateway: Single
+managedNodeGroups:
+  - name: ng-small
+    instanceType: t3.small
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 2
+    volumeSize: 20
