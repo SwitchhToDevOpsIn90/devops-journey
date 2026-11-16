@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dockerapp
+  namespace: dockerapp
+  labels: { app: dockerapp }
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels: { app: dockerapp }
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  template:
+    metadata:
+      labels: { app: dockerapp }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+      containers:
+        - name: dockerapp
+          image: IMAGE_PLACEHOLDER
+          ports:
+            - containerPort: 5000
+          readinessProbe:
+            httpGet: { path: /, port: 5000 }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: [ALL] }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dockerapp
+  namespace: dockerapp
+spec:
+  type: ClusterIP
+  selector: { app: dockerapp }
+  ports:
+    - port: 80
+      targetPort: 5000
