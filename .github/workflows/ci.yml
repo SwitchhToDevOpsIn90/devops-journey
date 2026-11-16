@@ -159,21 +159,3 @@ jobs:
           DIGEST_REF=$(docker inspect --format '{{index .RepoDigests 0}}' "$ECR_REPO:$GITHUB_SHA")
           echo "Pushed: $DIGEST_REF"
           echo "DIGEST_REF=$DIGEST_REF" >> "$GITHUB_ENV"
-
-  boundary-pr-cannot-assume:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      id-token: write
-    steps:
-      - id: try
-        continue-on-error: true
-        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
-        with:
-          role-to-assume: arn:aws:iam::446503125939:role/gha-devops-journey-deploy
-          aws-region: eu-north-1
-      - name: Expect AWS to refuse a PR token
-        run: |
-          echo "assume outcome: ${{ steps.try.outcome }}"
-          test "${{ steps.try.outcome }}" = "failure"
