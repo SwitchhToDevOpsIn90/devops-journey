@@ -127,7 +127,7 @@ jobs:
           fi
 
   deploy:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
     needs: ci-ok
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -143,14 +143,15 @@ jobs:
         with: { name: image, path: /tmp }
       - uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
           role-session-name: gha-deploy-${{ github.run_id }}
+          mask-aws-account-id: true
       - name: Who am I (short-lived role session, no stored keys)
         run: aws sts get-caller-identity --query Arn --output text
       - name: Push the exact image that passed smoke and scan
         env:
-          ECR_REPO: ${{ vars.ECR_REPO }}
+          ECR_REPO: ${{ secrets.ECR_REPO }}
         run: |
           docker load -i /tmp/image.tar
           docker tag "$IMAGE" "$ECR_REPO:$GITHUB_SHA"

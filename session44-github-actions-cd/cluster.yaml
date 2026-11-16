@@ -10,7 +10,7 @@ accessConfig:
   authenticationMode: API
   bootstrapClusterCreatorAdminPermissions: true
   accessEntries:
-    - principalARN: arn:aws:iam::446503125939:role/gha-devops-journey-deploy
+    - principalARN: arn:aws:iam::${AWS_ACCOUNT_ID}:role/gha-devops-journey-deploy
       accessPolicies:
         - policyARN: arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy
           accessScope:
