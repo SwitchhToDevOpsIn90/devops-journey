@@ -4,6 +4,8 @@ metadata:
   name: dockerapp
   namespace: dockerapp
   labels: { app: dockerapp }
+  annotations:
+    kubernetes.io/change-cause: "CHANGE_CAUSE_PLACEHOLDER"
 spec:
   replicas: 2
   revisionHistoryLimit: 5

@@ -1,0 +1,73 @@
+name: Deploy a digest
+
+# Started by Jenkins (or by hand) with an image that is already in ECR.
+# Same environment, same role and same deploy steps as the deploy job in ci.yml.
+on:
+  workflow_dispatch:
+    inputs:
+      image_digest:
+        description: Image digest already in ECR (sha256:...)
+        required: true
+        type: string
+      source:
+        description: Who built it, for the change-cause (e.g. jenkins-12)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Accept only well-formed inputs
+        env:
+          DIGEST: ${{ inputs.image_digest }}
+          SOURCE: ${{ inputs.source }}
+        run: |
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::image_digest must be sha256:<64 hex>"; exit 1; }
+          [[ "$SOURCE" =~ ^[A-Za-z0-9._-]{1,60}$ ]] || { echo "::error::source may only use letters, digits, dot, dash, underscore"; exit 1; }
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          role-session-name: gha-deploy-${{ github.run_id }}
+          mask-aws-account-id: true
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with: { persist-credentials: false }
+      - name: Check the digest is in our repository and built for amd64
+        env:
+          ECR_REPO: ${{ secrets.ECR_REPO }}
+          DIGEST: ${{ inputs.image_digest }}
+        run: |
+          echo "tags: $(aws ecr describe-images --repository-name "${ECR_REPO#*/}" --image-ids imageDigest="$DIGEST" --query 'imageDetails[0].imageTags' --output text)"
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPO%%/*}"
+          docker pull -q "$ECR_REPO@$DIGEST"
+          ARCH=$(docker image inspect -f '{{.Architecture}}' "$ECR_REPO@$DIGEST")
+          echo "architecture: $ARCH"
+          [ "$ARCH" = amd64 ] || { echo "::error::image is $ARCH but the nodes are amd64"; exit 1; }
+          echo "IMAGE_REF=$ECR_REPO@$DIGEST" >> "$GITHUB_ENV"
+      - name: Scan it again here (the deployer does not trust the caller's scan)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ env.IMAGE_REF }}
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          format: table
+      - uses: ./.github/actions/deploy-eks
+        with:
+          image: ${{ env.IMAGE_REF }}
+          cluster: ${{ vars.EKS_CLUSTER }}
+          change-cause: ${{ inputs.source }} run ${{ github.run_id }}
