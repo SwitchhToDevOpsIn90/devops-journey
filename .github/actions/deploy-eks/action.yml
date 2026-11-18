@@ -1,0 +1,65 @@
+name: Deploy to EKS by digest
+description: >
+  The one deploy path. Used by ci.yml (image built by GitHub Actions) and deploy.yml
+  (image built by Jenkins). Expects AWS credentials configured and the repository checked out.
+inputs:
+  image:
+    description: Image reference pinned by digest (<registry>/<repository>@sha256:...)
+    required: true
+  cluster:
+    description: EKS cluster name
+    required: true
+  change-cause:
+    description: Why this revision exists (shown by kubectl rollout history)
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Refuse anything that is not pinned by digest
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        [[ "$IMAGE" =~ @sha256:[0-9a-f]{64}$ ]] || { echo "::error::image must be pinned by digest"; exit 1; }
+    - name: Point kubectl at the cluster
+      shell: bash
+      env:
+        CLUSTER: ${{ inputs.cluster }}
+      run: aws eks update-kubeconfig --name "$CLUSTER"
+    - name: Apply manifests pinned to the digest, with the reason recorded
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+        CAUSE: ${{ inputs.change-cause }}
+      run: |
+        sed -e "s|IMAGE_PLACEHOLDER|$IMAGE|" -e "s|CHANGE_CAUSE_PLACEHOLDER|$CAUSE|" \
+          session44-github-actions-cd/k8s/app.yaml > /tmp/app.yaml
+        grep -nE 'image:|change-cause' /tmp/app.yaml
+        kubectl apply -f /tmp/app.yaml
+    - name: Roll out, and restore the previous revision if it never becomes healthy
+      shell: bash
+      run: |
+        if ! kubectl -n dockerapp rollout status deployment/dockerapp --timeout=180s; then
+          echo "::error::rollout did not become healthy, restoring the previous revision"
+          kubectl -n dockerapp rollout undo deployment/dockerapp || true
+          kubectl -n dockerapp rollout status deployment/dockerapp --timeout=180s || true
+          exit 1
+        fi
+    - name: Smoke test inside the cluster (retries, no fixed sleep)
+      shell: bash
+      run: |
+        kubectl -n dockerapp port-forward svc/dockerapp 8080:80 >/tmp/pf.log 2>&1 &
+        curl -sf --retry 15 --retry-connrefused --retry-delay 1 localhost:8080/ | tee /tmp/out.txt
+        echo
+        grep -q "Flask running" /tmp/out.txt
+        kubectl -n dockerapp rollout history deployment/dockerapp | tail -3
+    - name: Guardrail - the deploy identity is boxed into its namespace
+      shell: bash
+      run: |
+        for spec in "yes|create deployments -n dockerapp" "no|create deployments -n kube-system" \
+                    "no|get secrets -n kube-system" "no|create namespaces"; do
+          want=${spec%%|*}; args=${spec#*|}
+          got=$(kubectl auth can-i $args || true)
+          echo "can-i $args -> $got (expected $want)"
+          [ "$got" = "$want" ]
+        done
