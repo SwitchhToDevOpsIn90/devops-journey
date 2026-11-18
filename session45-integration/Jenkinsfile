@@ -30,7 +30,8 @@ pipeline {
             steps {
                 sh '''
                     python3 -m venv .venv
-                    .venv/bin/pip install --quiet -r ${APP_DIR}/requirements.txt -r ${APP_DIR}/requirements-dev.txt
+                    .venv/bin/pip install --quiet --require-hashes -r ${APP_DIR}/requirements.txt
+                    .venv/bin/pip install --quiet -r ${APP_DIR}/requirements-dev.txt
                     cd ${APP_DIR} && ../.venv/bin/python -m pytest -q --junitxml=../test-results.xml
                 '''
             }
