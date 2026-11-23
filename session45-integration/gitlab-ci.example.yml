@@ -1,0 +1,118 @@
+# The same pipeline written for GitLab CI, for comparison only.
+# This repository runs on GitHub; GitLab would read this file as .gitlab-ci.yml.
+# Mirrors .github/workflows/ci.yml + .github/actions/deploy-eks (Sessions 43-45).
+
+stages: [lint, test, build, verify, gate, deploy]
+
+variables:
+  APP_DIR: session22-dockerfile
+  IMAGE: dockerapp:$CI_COMMIT_SHA
+  AWS_REGION: eu-north-1
+
+# Run for merge requests and for the default branch only (GitHub: on pull_request + push to main)
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# Superseded pipelines may be cancelled (GitHub: concurrency cancel-in-progress);
+# the deploy job below turns this off for itself.
+default:
+  interruptible: true
+
+lint:
+  stage: lint
+  image: python:3.13-alpine
+  script:
+    - pip install -r $APP_DIR/requirements-dev.txt
+    - ruff check $APP_DIR
+
+test:
+  stage: test
+  image: python:$PY-alpine
+  parallel:
+    matrix:
+      - PY: ["3.12", "3.13"]          # GitHub: strategy.matrix
+  script:
+    - cd $APP_DIR
+    - pip install --require-hashes -r requirements.txt
+    - pip install -r requirements-dev.txt
+    - python -m pytest -q --junitxml=results-$PY.xml
+  artifacts:
+    when: always
+    reports:
+      junit: $APP_DIR/results-$PY.xml   # GitLab shows test results in the merge request
+
+build:
+  stage: build
+  image: docker:29
+  services: [docker:29-dind]         # GitHub runners have Docker built in; GitLab adds it as a service
+  script:
+    - docker build --platform linux/amd64 -t $IMAGE $APP_DIR
+    - docker save $IMAGE -o image.tar
+  artifacts:
+    paths: [image.tar]
+    expire_in: 1 day                 # GitHub: upload-artifact retention-days
+
+smoke:
+  stage: verify
+  image: docker:29
+  services: [docker:29-dind]
+  needs: [build]                     # GitHub: needs
+  script:
+    - docker load -i image.tar
+    - docker run -d --name smoke -p 5000:5000 $IMAGE
+    - apk add --no-cache curl
+    - curl -sf --retry 15 --retry-connrefused --retry-delay 1 http://docker:5000/ | grep -q "Flask running"
+    - test "$(docker exec smoke whoami)" = "appuser"
+
+scan:
+  stage: verify
+  image:
+    name: aquasec/trivy:0.76.2
+    entrypoint: [""]
+  needs: [build]
+  script:
+    - trivy image --input image.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1
+
+# The single required check (GitHub: ci-ok). GitLab usually relies on
+# "Pipelines must succeed" in the project's merge request settings instead.
+ci-ok:
+  stage: gate
+  image: alpine:3.20
+  needs: [lint, test, smoke, scan]
+  script:
+    - echo "all checks passed"
+
+deploy:
+  stage: deploy
+  image: docker:29
+  services: [docker:29-dind]
+  needs: [ci-ok, build]
+  interruptible: false               # never cancel a rollout halfway
+  resource_group: production         # one deploy at a time (GitHub: concurrency group)
+  environment:
+    name: production                 # approvals: protected environment (paid tiers) or when: manual
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $DEPLOY_ENABLED == "true"
+      when: manual                   # a human clicks "play" (GitHub: required reviewer)
+  id_tokens:
+    AWS_ID_TOKEN:
+      aud: sts.amazonaws.com         # GitHub: permissions id-token: write
+  # AWS trust policy for GitLab: provider gitlab.com, and a sub condition such as
+  # project_path:<group>/<project>:ref_type:branch:ref:main
+  script:
+    - apk add --no-cache aws-cli kubectl curl
+    - >
+      export $(printf "AWS_ACCESS_KEY_ID=%s AWS_SECRET_ACCESS_KEY=%s AWS_SESSION_TOKEN=%s"
+      $(aws sts assume-role-with-web-identity --role-arn "$AWS_DEPLOY_ROLE_ARN"
+      --role-session-name "gitlab-$CI_PIPELINE_ID" --web-identity-token "$AWS_ID_TOKEN"
+      --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text))
+    - docker load -i image.tar
+    - aws ecr get-login-password | docker login --username AWS --password-stdin "${ECR_REPO%%/*}"
+    - docker tag $IMAGE "$ECR_REPO:$CI_COMMIT_SHA"
+    - docker push "$ECR_REPO:$CI_COMMIT_SHA"
+    - DIGEST_REF=$(docker inspect --format '{{index .RepoDigests 0}}' "$ECR_REPO:$CI_COMMIT_SHA")
+    - aws eks update-kubeconfig --name "$EKS_CLUSTER"
+    - sed -e "s|IMAGE_PLACEHOLDER|$DIGEST_REF|" -e "s|CHANGE_CAUSE_PLACEHOLDER|gitlab $CI_COMMIT_SHORT_SHA pipeline $CI_PIPELINE_ID|" session44-github-actions-cd/k8s/app.yaml | kubectl apply -f -
+    - kubectl -n dockerapp rollout status deployment/dockerapp --timeout=180s || { kubectl -n dockerapp rollout undo deployment/dockerapp; exit 1; }
