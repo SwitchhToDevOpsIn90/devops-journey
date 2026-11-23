@@ -1,0 +1,74 @@
+// Session 45: Jenkins as a scheduled scanner of the image production runs.
+// "What production runs" = the digest behind the ECR tag `production`, which the deploy action
+// moves only after rollout, smoke test and guardrail passed. Nothing here can push or deploy.
+pipeline {
+    agent none
+
+    triggers { cron('H 6 * * 1') }   // weekly: new CVEs appear against an image that did not change
+
+    options {
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '12'))
+        disableConcurrentBuilds()
+    }
+
+    parameters {
+        string(name: 'IMAGE_TAG', defaultValue: 'production',
+            description: 'ECR tag to resolve to a digest and scan. Use another tag only for a one-off check.')
+    }
+
+    environment {
+        AWS_DEFAULT_REGION = 'eu-north-1'
+        ECR_REPO_NAME = 'flask-docker-app'
+        READ_ROLE_NAME = 'jenkins-ecr-read'
+        TRIVY = 'aquasec/trivy:0.76.2'
+    }
+
+    stages {
+        stage('Resolve the tag to a digest, pull it, scan it') {
+            agent { label 'docker-builder' }
+            options { skipDefaultCheckout() }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'aws-jenkins-handoff',
+                                                  usernameVariable: 'AWS_ACCESS_KEY_ID',
+                                                  passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh '''
+                        set +x
+                        set -e
+                        export DOCKER_CONFIG=$(mktemp -d)
+                        trap 'rm -rf "$DOCKER_CONFIG"' EXIT
+                        ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+                        set -- $(aws sts assume-role --role-arn arn:aws:iam::${ACCOUNT}:role/${READ_ROLE_NAME} \
+                                   --role-session-name jenkins-scan-${BUILD_NUMBER} --duration-seconds 900 \
+                                   --query 'Credentials.[AccessKeyId,SecretAccessKey,SessionToken]' --output text)
+                        export AWS_ACCESS_KEY_ID=$1 AWS_SECRET_ACCESS_KEY=$2 AWS_SESSION_TOKEN=$3
+                        echo "acting as: $(aws sts get-caller-identity --query Arn --output text | sed 's/::[0-9]*:/::<ACCOUNT_ID>:/')"
+
+                        DIGEST=$(aws ecr describe-images --repository-name ${ECR_REPO_NAME} --image-ids imageTag=${IMAGE_TAG} \
+                                   --query 'imageDetails[0].imageDigest' --output text)
+                        echo "${DIGEST}" > digest.txt
+                        echo "tag ${IMAGE_TAG} -> ${DIGEST}"
+
+                        REGISTRY=${ACCOUNT}.dkr.ecr.${AWS_DEFAULT_REGION}.amazonaws.com
+                        aws ecr get-login-password | docker login --username AWS --password-stdin ${REGISTRY} >/dev/null
+                        docker pull -q --platform linux/amd64 ${REGISTRY}/${ECR_REPO_NAME}@${DIGEST} >/dev/null
+                        docker tag ${REGISTRY}/${ECR_REPO_NAME}@${DIGEST} scan-target:${BUILD_NUMBER}
+
+                        set +e
+                        docker save scan-target:${BUILD_NUMBER} | docker run -i --rm --entrypoint sh ${TRIVY} -c \
+                          'cat > /tmp/image.tar && trivy image --quiet --input /tmp/image.tar --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1' \
+                          > scan-report.txt 2>&1
+                        RC=$?
+                        set -e
+                        cat scan-report.txt
+                        docker rmi -f scan-target:${BUILD_NUMBER} >/dev/null 2>&1 || true
+                        echo "trivy exit code: ${RC} (0 = no fixable HIGH/CRITICAL findings)"
+                        exit ${RC}
+                    '''
+                }
+            }
+            post { always { archiveArtifacts artifacts: 'scan-report.txt,digest.txt', allowEmptyArchive: true } }
+        }
+    }
+}
