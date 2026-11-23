@@ -63,3 +63,20 @@ runs:
           echo "can-i $args -> $got (expected $want)"
           [ "$got" = "$want" ]
         done
+    - name: Record this digest as what production runs (ECR tag "production")
+      shell: bash
+      env:
+        IMAGE: ${{ inputs.image }}
+      run: |
+        # Last step on purpose: the tag only moves after rollout, smoke test and guardrail all passed.
+        REPO=${IMAGE%@*}; DIGEST=${IMAGE#*@}; NAME=${REPO#*/}
+        CURRENT=$(aws ecr describe-images --repository-name "$NAME" --image-ids imageTag=production \
+                    --query 'imageDetails[0].imageDigest' --output text 2>/dev/null || true)
+        if [ "$CURRENT" = "$DIGEST" ]; then echo "production already points at $DIGEST"; exit 0; fi
+        MANIFEST=$(aws ecr batch-get-image --repository-name "$NAME" --image-ids imageDigest="$DIGEST" \
+                     --query 'images[0].imageManifest' --output text)
+        MEDIA=$(aws ecr batch-get-image --repository-name "$NAME" --image-ids imageDigest="$DIGEST" \
+                  --query 'images[0].imageManifestMediaType' --output text)
+        aws ecr put-image --repository-name "$NAME" --image-tag production \
+          --image-manifest "$MANIFEST" --image-manifest-media-type "$MEDIA" >/dev/null
+        echo "production now points at $DIGEST"
