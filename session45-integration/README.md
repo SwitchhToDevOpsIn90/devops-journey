@@ -44,5 +44,6 @@ jcli build prod-image-scan -p IMAGE_TAG=<tag> -s -v
 ## Not tested yet
 
 - The `production` tag step in the deploy action (merged after the cluster was removed)
+- Moving the `production` tag will fail once ECR tag immutability is switched on (the repository is mutable today); exempt only `production` with `IMMUTABLE_WITH_EXCLUSION`, or record the digest in an SSM parameter instead
 - The automatic undo on a failed rollout (no rollout failed)
 - `gitlab-ci.example.yml` (no GitLab project)

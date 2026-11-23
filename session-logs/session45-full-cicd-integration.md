@@ -45,6 +45,7 @@ Real teams use more than one tool. Integration is not wiring two tools together;
 ## Not done yet
 - Graceful shutdown with a production server (gunicorn); rollback through `git revert`; widening the test matrix before moving the Python runtime
 - The `production` tag step and the automatic undo have been written but not run end to end (no live deploy after they were merged, and no rollout failed)
+- Before enabling ECR tag immutability (repository is mutable today): exempt only the `production` tag, or store the digest in an SSM parameter, because moving a tag is blocked on an immutable repository
 - A first-run default for the scanner parameter (`${IMAGE_TAG:-production}`)
 - A permanent Jenkins identity without stored keys (the weekly scan is disabled)
 - Free plan: the AWS Free plan ends about 10 January 2027 (48 days remained on 23 November); upgrade decision with budget alerts needed before then
